@@ -39,7 +39,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials/aaa-gas-prices-service-account.json
           GOOGLE_SHEET_ID: ${{ secrets.AAA_GAS_PRICES_SPREADSHEET_ID }}
         run: |
-          if [ "$(TZ=America/New_York date +%H:%M)" != "04:30" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(TZ=America/New_York date +%H:%M)" != "04:30" ]; then
             echo "Skipping run because local New York time is not 04:30."
             {
               echo "## AAA Gas Prices Sync"
