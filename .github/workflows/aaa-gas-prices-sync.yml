@@ -3,11 +3,10 @@ name: AAA Gas Prices Sync
 on:
   workflow_dispatch:
   schedule:
-    # Temporary test schedule: 9:30 AM Eastern.
-    # GitHub schedules are UTC. These two entries cover 9:30 AM Eastern
+    # GitHub schedules are UTC. These two entries cover 4:30 AM Eastern
     # across daylight saving time; the script below skips the off-season one.
-    - cron: "30 13 * * *"
-    - cron: "30 14 * * *"
+    - cron: "30 8 * * *"
+    - cron: "30 9 * * *"
 
 jobs:
   sync:
@@ -45,10 +44,10 @@ jobs:
 
           if [ "$EVENT_NAME" = "schedule" ]; then
             SHOULD_RUN="false"
-            if [ "$EVENT_SCHEDULE" = "30 13 * * *" ] && [ "$NY_OFFSET" = "-0400" ]; then
+            if [ "$EVENT_SCHEDULE" = "30 8 * * *" ] && [ "$NY_OFFSET" = "-0400" ]; then
               SHOULD_RUN="true"
             fi
-            if [ "$EVENT_SCHEDULE" = "30 14 * * *" ] && [ "$NY_OFFSET" = "-0500" ]; then
+            if [ "$EVENT_SCHEDULE" = "30 9 * * *" ] && [ "$NY_OFFSET" = "-0500" ]; then
               SHOULD_RUN="true"
             fi
             if [ "$SHOULD_RUN" != "true" ]; then
