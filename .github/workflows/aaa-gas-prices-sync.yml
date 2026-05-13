@@ -3,8 +3,10 @@ name: AAA Gas Prices Sync
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 4 * * *"
-      timezone: "America/New_York"
+    # GitHub schedules are UTC. These two entries cover 4:30 AM Eastern
+    # across daylight saving time; the script below skips the off-season one.
+    - cron: "30 8 * * *"
+    - cron: "30 9 * * *"
 
 jobs:
   sync:
@@ -36,10 +38,37 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials/aaa-gas-prices-service-account.json
           GOOGLE_SHEET_ID: ${{ secrets.AAA_GAS_PRICES_SPREADSHEET_ID }}
         run: |
+          EVENT_NAME="${{ github.event_name }}"
+          EVENT_SCHEDULE="${{ github.event.schedule }}"
+          NY_OFFSET="$(TZ=America/New_York date +%z)"
+
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            SHOULD_RUN="false"
+            if [ "$EVENT_SCHEDULE" = "30 8 * * *" ] && [ "$NY_OFFSET" = "-0400" ]; then
+              SHOULD_RUN="true"
+            fi
+            if [ "$EVENT_SCHEDULE" = "30 9 * * *" ] && [ "$NY_OFFSET" = "-0500" ]; then
+              SHOULD_RUN="true"
+            fi
+            if [ "$SHOULD_RUN" != "true" ]; then
+              echo "Skipping off-season schedule: $EVENT_SCHEDULE at New York offset $NY_OFFSET."
+              {
+                echo "## AAA Gas Prices Sync"
+                echo ""
+                echo "- Status: skipped"
+                echo "- Reason: off-season UTC schedule"
+                echo "- Event schedule: $EVENT_SCHEDULE"
+                echo "- New York offset: $NY_OFFSET"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+
           {
             echo "## AAA Gas Prices Sync"
             echo ""
             echo "- Status: running"
             echo "- Local time: $(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')"
+            echo "- Event schedule: ${EVENT_SCHEDULE:-manual}"
           } >> "$GITHUB_STEP_SUMMARY"
           python3 scripts/aaa_gas_prices_to_sheets.py
