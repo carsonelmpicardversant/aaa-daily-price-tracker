@@ -177,10 +177,11 @@ python3 scripts/aaa_gas_prices_to_sheets.py
 
 The workflow in
 [`/.github/workflows/aaa-gas-prices-sync.yml`](/Users/207000019@bwt3.com/Documents/New%20project%202/.github/workflows/aaa-gas-prices-sync.yml)
-runs at `08:30 UTC` and `09:30 UTC`, then exits unless the local New York time
-is exactly `04:30`. Manual `workflow_dispatch` runs always sync immediately, so
-you can test the job anytime without waiting for the scheduled window. This
-keeps the daily run at `4:30 AM Eastern` year-round across DST changes.
+runs at `4:30 AM` in the `America/New_York` timezone. Manual
+`workflow_dispatch` runs also sync immediately, so you can test the job anytime
+without waiting for the scheduled window. GitHub may start scheduled workflows a
+little late during periods of Actions load, but the job will still sync when it
+starts.
 
 ## Useful Local Checks
 

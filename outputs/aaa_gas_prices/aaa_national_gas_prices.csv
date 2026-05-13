@@ -9263,7 +9263,7 @@ date,status,regular,mid_grade,premium,diesel,e85,source_kind,source_row,source_p
 2025-05-10,ok,3.139,3.623,3.979,3.529,2.548,live,Year Ago Avg.,2026-05-10,2026-05-10T08:00:35+00:00,https://gasprices.aaa.com/?state=US,2026-05-10T08:00:35+00:00
 2025-05-11,ok,3.135,3.619,3.974,3.523,2.535,live,Year Ago Avg.,2026-05-11,2026-05-11T08:05:25+00:00,https://gasprices.aaa.com/?state=US,2026-05-11T08:05:25+00:00
 2025-05-12,ok,3.137,3.608,3.968,3.510,2.543,live,Year Ago Avg.,2026-05-12,2026-05-12T12:51:29+00:00,https://gasprices.aaa.com/?state=US,2026-05-12T12:51:29+00:00
-2025-05-13,ok,3.157,3.648,4.000,3.529,2.557,historical_xls,Fuel Gauge History,2025-05-13,2026-05-06T20:02:48+00:00,/Users/207000019@bwt3.com/Downloads/FuelGaugeHistory 00_01 to 26_0506.xls,2026-05-06T20:05:38+00:00
+2025-05-13,ok,3.157,3.648,4.000,3.529,2.557,live,Year Ago Avg.,2026-05-13,2026-05-13T08:03:53+00:00,https://gasprices.aaa.com/?state=US,2026-05-13T08:03:53+00:00
 2025-05-14,ok,3.180,3.672,4.024,3.542,2.577,historical_xls,Fuel Gauge History,2025-05-14,2026-05-06T20:02:48+00:00,/Users/207000019@bwt3.com/Downloads/FuelGaugeHistory 00_01 to 26_0506.xls,2026-05-06T20:05:38+00:00
 2025-05-15,ok,3.193,3.681,4.036,3.549,2.602,historical_xls,Fuel Gauge History,2025-05-15,2026-05-06T20:02:48+00:00,/Users/207000019@bwt3.com/Downloads/FuelGaugeHistory 00_01 to 26_0506.xls,2026-05-06T20:05:38+00:00
 2025-05-16,ok,3.192,3.680,4.035,3.552,2.602,historical_xls,Fuel Gauge History,2025-05-16,2026-05-06T20:02:48+00:00,/Users/207000019@bwt3.com/Downloads/FuelGaugeHistory 00_01 to 26_0506.xls,2026-05-06T20:05:38+00:00
@@ -9598,7 +9598,7 @@ date,status,regular,mid_grade,premium,diesel,e85,source_kind,source_row,source_p
 2026-04-10,ok,4.153,4.668,5.033,5.683,3.303,live,Month Ago Avg.,2026-05-10,2026-05-10T08:00:35+00:00,https://gasprices.aaa.com/?state=US,2026-05-10T08:00:35+00:00
 2026-04-11,ok,4.135,4.651,5.016,5.670,3.290,live,Month Ago Avg.,2026-05-11,2026-05-11T08:05:25+00:00,https://gasprices.aaa.com/?state=US,2026-05-11T08:05:25+00:00
 2026-04-12,ok,4.125,4.636,5.003,5.663,3.279,live,Month Ago Avg.,2026-05-12,2026-05-12T12:51:29+00:00,https://gasprices.aaa.com/?state=US,2026-05-12T12:51:29+00:00
-2026-04-13,ok,4.125,4.624,4.996,5.652,3.269,historical_xls,Fuel Gauge History,2026-04-13,2026-05-06T20:02:48+00:00,/Users/207000019@bwt3.com/Downloads/FuelGaugeHistory 00_01 to 26_0506.xls,2026-05-06T20:05:38+00:00
+2026-04-13,ok,4.125,4.624,4.996,5.652,3.269,live,Month Ago Avg.,2026-05-13,2026-05-13T08:03:53+00:00,https://gasprices.aaa.com/?state=US,2026-05-13T08:03:53+00:00
 2026-04-14,ok,4.118,4.627,4.992,5.650,3.260,historical_xls,Fuel Gauge History,2026-04-14,2026-05-06T20:02:48+00:00,/Users/207000019@bwt3.com/Downloads/FuelGaugeHistory 00_01 to 26_0506.xls,2026-05-06T20:05:38+00:00
 2026-04-15,ok,4.108,4.622,4.986,5.635,3.245,historical_xls,Fuel Gauge History,2026-04-15,2026-05-06T20:02:48+00:00,/Users/207000019@bwt3.com/Downloads/FuelGaugeHistory 00_01 to 26_0506.xls,2026-05-06T20:05:38+00:00
 2026-04-16,ok,4.093,4.607,4.971,5.614,3.228,historical_xls,Fuel Gauge History,2026-04-16,2026-05-06T20:02:48+00:00,/Users/207000019@bwt3.com/Downloads/FuelGaugeHistory 00_01 to 26_0506.xls,2026-05-06T20:05:38+00:00
@@ -9628,3 +9628,4 @@ date,status,regular,mid_grade,premium,diesel,e85,source_kind,source_row,source_p
 2026-05-10,ok,4.522,5.011,5.384,5.647,3.634,live,Current Avg.,2026-05-10,2026-05-10T08:00:35+00:00,https://gasprices.aaa.com/?state=US,2026-05-10T08:00:35+00:00
 2026-05-11,ok,4.520,4.997,5.374,5.636,3.626,live,Current Avg.,2026-05-11,2026-05-11T08:05:25+00:00,https://gasprices.aaa.com/?state=US,2026-05-11T08:05:25+00:00
 2026-05-12,ok,4.504,4.994,5.366,5.644,3.614,live,Current Avg.,2026-05-12,2026-05-12T12:51:29+00:00,https://gasprices.aaa.com/?state=US,2026-05-12T12:51:29+00:00
+2026-05-13,ok,4.511,5.005,5.375,5.659,3.633,live,Current Avg.,2026-05-13,2026-05-13T08:03:53+00:00,https://gasprices.aaa.com/?state=US,2026-05-13T08:03:53+00:00

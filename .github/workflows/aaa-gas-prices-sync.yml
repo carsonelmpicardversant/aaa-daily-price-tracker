@@ -3,11 +3,8 @@ name: AAA Gas Prices Sync
 on:
   workflow_dispatch:
   schedule:
-    # Run twice so we can hit 4:30 AM Eastern year-round.
-    # 08:30 UTC == 4:30 AM EDT
-    # 09:30 UTC == 4:30 AM EST
-    - cron: "30 8 * * *"
-    - cron: "30 9 * * *"
+    - cron: "30 4 * * *"
+      timezone: "America/New_York"
 
 jobs:
   sync:
@@ -39,16 +36,6 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/credentials/aaa-gas-prices-service-account.json
           GOOGLE_SHEET_ID: ${{ secrets.AAA_GAS_PRICES_SPREADSHEET_ID }}
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(TZ=America/New_York date +%H:%M)" != "04:30" ]; then
-            echo "Skipping run because local New York time is not 04:30."
-            {
-              echo "## AAA Gas Prices Sync"
-              echo ""
-              echo "- Status: skipped"
-              echo "- Reason: local New York time was not 04:30"
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
           {
             echo "## AAA Gas Prices Sync"
             echo ""
