@@ -62,6 +62,7 @@ python3 scripts/aaa_state_gas_prices_to_sheets.py \
   --start-date 2026-02-28 \
   --end-date 2026-05-14 \
   --target-window-days 3 \
+  --report-missing \
   --credentials credentials/aaa-gas-prices-service-account.json \
   --spreadsheet-id 1TqhBPhIdWGJAgcmaB4Lfk9CYEFAPSLgpIbFx4v47sWY
 ```
@@ -69,6 +70,16 @@ python3 scripts/aaa_state_gas_prices_to_sheets.py \
 The targeted pass searches captures that could expose each missing date through
 AAA's `Current Avg.`, `Yesterday Avg.`, `Week Ago Avg.`, `Month Ago Avg.`, or
 `Year Ago Avg.` rows.
+
+The targeted pass is intentionally more aggressive than the initial backfill:
+
+- it queries compact Wayback ranges around each likely source date instead of
+  one large date span
+- it does not collapse captures by digest, which avoids losing same-day
+  snapshots
+- it also checks 28-32 day offsets because archived AAA month comparisons can
+  be more useful when exact calendar-month captures are missing
+- `--report-missing` prints the remaining gaps after the pass finishes
 
 ## All-State Run
 

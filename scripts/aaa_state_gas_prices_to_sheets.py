@@ -88,6 +88,7 @@ class StateResult:
     ok_days: int
     expected_days: int
     latest_date: dt.date | None
+    missing_dates: tuple[dt.date, ...]
 
 
 def aaa_state_url(state_code: str) -> str:
@@ -144,6 +145,8 @@ def fetch_wayback_captures_for_state(
     state_code: str,
     lookup_start: dt.date,
     lookup_end: dt.date,
+    *,
+    collapse_digest: bool,
 ) -> list[dict[str, str]]:
     params = {
         "url": aaa_state_url(state_code),
@@ -152,8 +155,9 @@ def fetch_wayback_captures_for_state(
         "output": "json",
         "fl": "timestamp,original,statuscode,mimetype,digest",
         "filter": "statuscode:200",
-        "collapse": "digest",
     }
+    if collapse_digest:
+        params["collapse"] = "digest"
     cdx_url = f"{WAYBACK_CDX_URL}?{urllib.parse.urlencode(params)}"
     payload = aaa.http_get_text(cdx_url, retries=4, timeout=90)
     data = json.loads(payload)
@@ -167,6 +171,61 @@ def fetch_wayback_captures_for_state(
         for capture in captures
         if capture.get("mimetype", "").startswith("text/html")
     ]
+
+
+def merge_captures(captures: Iterable[dict[str, str]]) -> list[dict[str, str]]:
+    by_timestamp: dict[str, dict[str, str]] = {}
+    for capture in captures:
+        timestamp = capture.get("timestamp", "")
+        if timestamp:
+            by_timestamp[timestamp] = capture
+    return [by_timestamp[key] for key in sorted(by_timestamp)]
+
+
+def coalesce_dates_to_ranges(
+    dates: Iterable[dt.date],
+) -> list[tuple[dt.date, dt.date]]:
+    sorted_dates = sorted(set(dates))
+    if not sorted_dates:
+        return []
+
+    ranges: list[tuple[dt.date, dt.date]] = []
+    range_start = sorted_dates[0]
+    previous = sorted_dates[0]
+    for current in sorted_dates[1:]:
+        if current == previous + dt.timedelta(days=1):
+            previous = current
+            continue
+        ranges.append((range_start, previous))
+        range_start = current
+        previous = current
+    ranges.append((range_start, previous))
+    return ranges
+
+
+def fetch_targeted_wayback_captures_for_state(
+    state_code: str,
+    target_capture_dates: set[dt.date],
+    *,
+    verbose: bool,
+) -> list[dict[str, str]]:
+    captures: list[dict[str, str]] = []
+    ranges = coalesce_dates_to_ranges(target_capture_dates)
+    for index, (range_start, range_end) in enumerate(ranges, start=1):
+        range_captures = fetch_wayback_captures_for_state(
+            state_code,
+            range_start,
+            range_end,
+            collapse_digest=False,
+        )
+        captures.extend(range_captures)
+        if verbose:
+            print(
+                f"{state_code}: CDX target range {index}/{len(ranges)} "
+                f"{range_start} to {range_end}: {len(range_captures)} captures.",
+                flush=True,
+            )
+    return merge_captures(captures)
 
 
 def capture_date(timestamp: str) -> dt.date:
@@ -193,13 +252,17 @@ def target_capture_dates_for_missing(
 ) -> set[dt.date]:
     targets: set[dt.date] = set()
     for missing_date in missing_dates:
-        likely_price_as_of_dates = {
+        likely_price_as_of_dates = [
             missing_date,
             missing_date + dt.timedelta(days=1),
             missing_date + dt.timedelta(days=7),
             aaa.add_months(missing_date, 1),
+            *[
+                missing_date + dt.timedelta(days=days)
+                for days in range(28, 33)
+            ],
             aaa.add_months(missing_date, 12),
-        }
+        ]
         for price_as_of_date in likely_price_as_of_dates:
             for offset_days in range(-window_days, window_days + 1):
                 targets.add(price_as_of_date + dt.timedelta(days=offset_days))
@@ -227,13 +290,24 @@ def fetch_state_wayback_records(
     target_capture_dates: set[dt.date] | None,
     verbose: bool,
 ) -> list[aaa.PriceRecord]:
-    captures = fetch_wayback_captures_for_state(state_code, lookup_start, lookup_end)
     if target_capture_dates is not None:
+        captures = fetch_targeted_wayback_captures_for_state(
+            state_code,
+            target_capture_dates,
+            verbose=verbose,
+        )
         captures = [
             capture
             for capture in captures
             if capture_date(capture["timestamp"]) in target_capture_dates
         ]
+    else:
+        captures = fetch_wayback_captures_for_state(
+            state_code,
+            lookup_start,
+            lookup_end,
+            collapse_digest=True,
+        )
     if limit_captures:
         captures = captures[:limit_captures]
     if verbose:
@@ -372,7 +446,12 @@ def process_state(
     aaa.write_csv(csv_path, csv_rows)
 
     expected_days = (end_date - effective_start_date).days + 1
-    ok_days = sum(1 for row in csv_rows[1:] if row[1] == "ok")
+    missing_dates = tuple(
+        dt.date.fromisoformat(row[0])
+        for row in csv_rows[1:]
+        if row[1] == "missing"
+    )
+    ok_days = expected_days - len(missing_dates)
     latest_date = max((record.date for record in merged), default=None)
     print(
         f"{state_code}: wrote {csv_path} with "
@@ -386,6 +465,7 @@ def process_state(
         ok_days=ok_days,
         expected_days=expected_days,
         latest_date=latest_date,
+        missing_dates=missing_dates,
     )
 
 
@@ -597,6 +677,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Do not write the all-state comparison tab.",
     )
     parser.add_argument(
+        "--report-missing",
+        action="store_true",
+        help="Print remaining missing dates after each state is processed.",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print capture-level backfill progress.",
@@ -635,6 +720,22 @@ def main() -> int:
         except Exception as exc:
             failures.append(f"{state_code}: {exc}")
             print(f"Error: {state_code}: {exc}", file=sys.stderr, flush=True)
+
+    if args.report_missing:
+        for result in results:
+            if result.missing_dates:
+                missing_preview = ", ".join(
+                    day.isoformat() for day in result.missing_dates[:40]
+                )
+                if len(result.missing_dates) > 40:
+                    missing_preview += ", ..."
+                print(
+                    f"{result.code}: {len(result.missing_dates)} missing dates: "
+                    f"{missing_preview}",
+                    flush=True,
+                )
+            else:
+                print(f"{result.code}: no missing dates.", flush=True)
 
     if args.skip_google:
         print("Skipped Google Sheets sync because --skip-google was set.", flush=True)
