@@ -185,6 +185,9 @@ window. GitHub may start scheduled workflows a little late during periods of
 Actions load, but the job will still sync when the scheduled entry is the
 correct one for the current Eastern offset.
 
+For stricter cloud scheduling, use Cloud Scheduler + Cloud Run Jobs instead.
+See [`docs/google_cloud_scheduler_setup.md`](/Users/207000019@bwt3.com/Documents/New%20project%202/docs/google_cloud_scheduler_setup.md).
+
 ## Useful Local Checks
 
 Write only the CSV, without touching Google Sheets:
