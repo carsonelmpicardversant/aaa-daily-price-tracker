@@ -52,6 +52,24 @@ That will:
 - update the `Iowa` tab
 - update `State Comparison Since Feb 28`
 
+If the first backfill leaves gaps, rerun a targeted missing-date pass:
+
+```sh
+python3 scripts/aaa_state_gas_prices_to_sheets.py \
+  --states IA \
+  --backfill \
+  --only-missing \
+  --start-date 2026-02-28 \
+  --end-date 2026-05-14 \
+  --target-window-days 3 \
+  --credentials credentials/aaa-gas-prices-service-account.json \
+  --spreadsheet-id 1TqhBPhIdWGJAgcmaB4Lfk9CYEFAPSLgpIbFx4v47sWY
+```
+
+The targeted pass searches captures that could expose each missing date through
+AAA's `Current Avg.`, `Yesterday Avg.`, `Week Ago Avg.`, `Month Ago Avg.`, or
+`Year Ago Avg.` rows.
+
 ## All-State Run
 
 After Iowa is verified:

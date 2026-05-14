@@ -169,6 +169,43 @@ def fetch_wayback_captures_for_state(
     ]
 
 
+def capture_date(timestamp: str) -> dt.date:
+    return dt.datetime.strptime(timestamp[:8], "%Y%m%d").date()
+
+
+def missing_dates_between(
+    records: Iterable[aaa.PriceRecord],
+    start_date: dt.date,
+    end_date: dt.date,
+) -> set[dt.date]:
+    populated = {record.date for record in records}
+    return {
+        day
+        for day in aaa.date_range(start_date, end_date)
+        if day not in populated
+    }
+
+
+def target_capture_dates_for_missing(
+    missing_dates: Iterable[dt.date],
+    *,
+    window_days: int,
+) -> set[dt.date]:
+    targets: set[dt.date] = set()
+    for missing_date in missing_dates:
+        likely_price_as_of_dates = {
+            missing_date,
+            missing_date + dt.timedelta(days=1),
+            missing_date + dt.timedelta(days=7),
+            aaa.add_months(missing_date, 1),
+            aaa.add_months(missing_date, 12),
+        }
+        for price_as_of_date in likely_price_as_of_dates:
+            for offset_days in range(-window_days, window_days + 1):
+                targets.add(price_as_of_date + dt.timedelta(days=offset_days))
+    return targets
+
+
 def wayback_capture_url(state_code: str, timestamp: str) -> str:
     return (
         f"https://web.archive.org/web/{timestamp}id_/"
@@ -187,9 +224,16 @@ def fetch_state_wayback_records(
     capture_retries: int,
     capture_timeout: int,
     limit_captures: int | None,
+    target_capture_dates: set[dt.date] | None,
     verbose: bool,
 ) -> list[aaa.PriceRecord]:
     captures = fetch_wayback_captures_for_state(state_code, lookup_start, lookup_end)
+    if target_capture_dates is not None:
+        captures = [
+            capture
+            for capture in captures
+            if capture_date(capture["timestamp"]) in target_capture_dates
+        ]
     if limit_captures:
         captures = captures[:limit_captures]
     if verbose:
@@ -246,7 +290,9 @@ def process_state(
     end_date: dt.date,
     baseline_date: dt.date,
     backfill: bool,
+    only_missing: bool,
     wayback_window_days: int,
+    target_window_days: int,
     sleep_seconds: float,
     capture_retries: int,
     capture_timeout: int,
@@ -270,8 +316,31 @@ def process_state(
         raise ValueError(f"{state_code}: --end-date must be on or after --start-date.")
 
     if backfill:
-        lookup_start = effective_start_date - dt.timedelta(days=wayback_window_days)
-        lookup_end = end_date + dt.timedelta(days=wayback_window_days)
+        target_capture_dates = None
+        if only_missing:
+            missing_dates = missing_dates_between(
+                all_records,
+                effective_start_date,
+                end_date,
+            )
+            target_capture_dates = target_capture_dates_for_missing(
+                missing_dates,
+                window_days=target_window_days,
+            )
+            if target_capture_dates:
+                lookup_start = min(target_capture_dates)
+                lookup_end = max(target_capture_dates)
+            else:
+                lookup_start = effective_start_date
+                lookup_end = end_date
+            print(
+                f"{state_code}: targeting {len(missing_dates)} missing dates "
+                f"with {len(target_capture_dates)} likely capture dates.",
+                flush=True,
+            )
+        else:
+            lookup_start = effective_start_date - dt.timedelta(days=wayback_window_days)
+            lookup_end = end_date + dt.timedelta(days=wayback_window_days)
         print(
             f"{state_code}: backfilling from {effective_start_date} to {end_date} "
             f"using captures from {lookup_start} to {lookup_end}.",
@@ -288,6 +357,7 @@ def process_state(
                 capture_retries=capture_retries,
                 capture_timeout=capture_timeout,
                 limit_captures=limit_captures,
+                target_capture_dates=target_capture_dates,
                 verbose=verbose,
             )
         )
@@ -450,10 +520,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Fetch Wayback captures before the live AAA page.",
     )
     parser.add_argument(
+        "--only-missing",
+        action="store_true",
+        help=(
+            "When backfilling, inspect captures likely to fill currently "
+            "missing dates instead of scanning the whole date range."
+        ),
+    )
+    parser.add_argument(
         "--wayback-window-days",
         type=int,
         default=2,
         help="Extra days around the requested date range to inspect in Wayback.",
+    )
+    parser.add_argument(
+        "--target-window-days",
+        type=int,
+        default=2,
+        help=(
+            "Days around each likely source date to inspect when using "
+            "--only-missing."
+        ),
     )
     parser.add_argument(
         "--sleep",
@@ -535,7 +622,9 @@ def main() -> int:
                     end_date=args.end_date,
                     baseline_date=args.baseline_date,
                     backfill=args.backfill,
+                    only_missing=args.only_missing,
                     wayback_window_days=args.wayback_window_days,
+                    target_window_days=args.target_window_days,
                     sleep_seconds=args.sleep,
                     capture_retries=args.capture_retries,
                     capture_timeout=args.capture_timeout,
