@@ -95,6 +95,15 @@ def aaa_state_url(state_code: str) -> str:
     return f"https://gasprices.aaa.com/?state={urllib.parse.quote(state_code)}"
 
 
+def state_matches_original_url(original_url: str, state_code: str) -> bool:
+    parsed = urllib.parse.urlparse(original_url)
+    query = urllib.parse.parse_qs(parsed.query)
+    state_values = query.get("state", [])
+    if any(value.upper() == state_code.upper() for value in state_values):
+        return True
+    return f"state={state_code.lower()}" in original_url.lower()
+
+
 def state_csv_path(csv_dir: Path, state_code: str) -> Path:
     return csv_dir / f"{state_code.upper()}.csv"
 
@@ -146,10 +155,12 @@ def fetch_wayback_captures_for_state(
     lookup_start: dt.date,
     lookup_end: dt.date,
     *,
+    broad_url_search: bool,
     collapse_digest: bool,
 ) -> list[dict[str, str]]:
+    lookup_url = "gasprices.aaa.com/*" if broad_url_search else aaa_state_url(state_code)
     params = {
-        "url": aaa_state_url(state_code),
+        "url": lookup_url,
         "from": lookup_start.strftime("%Y%m%d"),
         "to": lookup_end.strftime("%Y%m%d"),
         "output": "json",
@@ -177,11 +188,18 @@ def fetch_wayback_captures_for_state(
 
     header = data[0]
     captures = [dict(zip(header, row)) for row in data[1:]]
-    return [
+    html_captures = [
         capture
         for capture in captures
         if capture.get("mimetype", "").startswith("text/html")
     ]
+    if broad_url_search:
+        html_captures = [
+            capture
+            for capture in html_captures
+            if state_matches_original_url(capture.get("original", ""), state_code)
+        ]
+    return html_captures
 
 
 def merge_captures(captures: Iterable[dict[str, str]]) -> list[dict[str, str]]:
@@ -218,6 +236,7 @@ def fetch_targeted_wayback_captures_for_state(
     state_code: str,
     target_capture_dates: set[dt.date],
     *,
+    broad_url_search: bool,
     sleep_seconds: float,
     verbose: bool,
 ) -> list[dict[str, str]]:
@@ -229,6 +248,7 @@ def fetch_targeted_wayback_captures_for_state(
                 state_code,
                 range_start,
                 range_end,
+                broad_url_search=False,
                 collapse_digest=False,
             )
         except Exception as exc:
@@ -248,6 +268,32 @@ def fetch_targeted_wayback_captures_for_state(
             )
         if sleep_seconds > 0:
             time.sleep(sleep_seconds)
+        if broad_url_search:
+            try:
+                broad_captures = fetch_wayback_captures_for_state(
+                    state_code,
+                    range_start,
+                    range_end,
+                    broad_url_search=True,
+                    collapse_digest=False,
+                )
+            except Exception as exc:
+                print(
+                    f"Warning: {state_code} skipped broad Wayback CDX range "
+                    f"{range_start} to {range_end}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                broad_captures = []
+            captures.extend(broad_captures)
+            if verbose:
+                print(
+                    f"{state_code}: broad CDX target range {index}/{len(ranges)} "
+                    f"{range_start} to {range_end}: {len(broad_captures)} captures.",
+                    flush=True,
+                )
+            if sleep_seconds > 0:
+                time.sleep(sleep_seconds)
     return merge_captures(captures)
 
 
@@ -292,11 +338,13 @@ def target_capture_dates_for_missing(
     return targets
 
 
-def wayback_capture_url(state_code: str, timestamp: str) -> str:
-    return (
-        f"https://web.archive.org/web/{timestamp}id_/"
-        f"{aaa_state_url(state_code)}"
-    )
+def wayback_capture_url(
+    state_code: str,
+    timestamp: str,
+    original_url: str | None,
+) -> str:
+    source_url = original_url or aaa_state_url(state_code)
+    return f"https://web.archive.org/web/{timestamp}id_/{source_url}"
 
 
 def fetch_state_wayback_records(
@@ -311,12 +359,14 @@ def fetch_state_wayback_records(
     capture_timeout: int,
     limit_captures: int | None,
     target_capture_dates: set[dt.date] | None,
+    broad_url_search: bool,
     verbose: bool,
 ) -> list[aaa.PriceRecord]:
     if target_capture_dates is not None:
         captures = fetch_targeted_wayback_captures_for_state(
             state_code,
             target_capture_dates,
+            broad_url_search=broad_url_search,
             sleep_seconds=sleep_seconds,
             verbose=verbose,
         )
@@ -330,6 +380,7 @@ def fetch_state_wayback_records(
             state_code,
             lookup_start,
             lookup_end,
+            broad_url_search=broad_url_search,
             collapse_digest=True,
         )
     if limit_captures:
@@ -343,7 +394,7 @@ def fetch_state_wayback_records(
     records: list[aaa.PriceRecord] = []
     for index, capture in enumerate(captures, start=1):
         timestamp = capture["timestamp"]
-        url = wayback_capture_url(state_code, timestamp)
+        url = wayback_capture_url(state_code, timestamp, capture.get("original"))
         try:
             page = aaa.http_get_text(
                 url,
@@ -391,6 +442,8 @@ def process_state(
     only_missing: bool,
     wayback_window_days: int,
     target_window_days: int,
+    max_capture_date: dt.date,
+    broad_wayback_url_search: bool,
     sleep_seconds: float,
     capture_retries: int,
     capture_timeout: int,
@@ -425,6 +478,11 @@ def process_state(
                 missing_dates,
                 window_days=target_window_days,
             )
+            target_capture_dates = {
+                target_date
+                for target_date in target_capture_dates
+                if target_date <= max_capture_date
+            }
             if target_capture_dates:
                 lookup_start = min(target_capture_dates)
                 lookup_end = max(target_capture_dates)
@@ -438,7 +496,10 @@ def process_state(
             )
         else:
             lookup_start = effective_start_date - dt.timedelta(days=wayback_window_days)
-            lookup_end = end_date + dt.timedelta(days=wayback_window_days)
+            lookup_end = min(
+                end_date + dt.timedelta(days=wayback_window_days),
+                max_capture_date,
+            )
         print(
             f"{state_code}: backfilling from {effective_start_date} to {end_date} "
             f"using captures from {lookup_start} to {lookup_end}.",
@@ -456,6 +517,7 @@ def process_state(
                 capture_timeout=capture_timeout,
                 limit_captures=limit_captures,
                 target_capture_dates=target_capture_dates,
+                broad_url_search=broad_wayback_url_search,
                 verbose=verbose,
             )
         )
@@ -647,6 +709,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-capture-date",
+        type=parse_date_arg,
+        default=dt.date.today(),
+        help=(
+            "Latest Wayback capture date to query. Defaults to today so "
+            "future month/year comparison captures are not requested."
+        ),
+    )
+    parser.add_argument(
+        "--broad-wayback-url-search",
+        action="store_true",
+        help=(
+            "Also search broader gasprices.aaa.com Wayback captures and "
+            "filter for matching state URLs."
+        ),
+    )
+    parser.add_argument(
         "--sleep",
         type=float,
         default=0.25,
@@ -734,6 +813,8 @@ def main() -> int:
                     only_missing=args.only_missing,
                     wayback_window_days=args.wayback_window_days,
                     target_window_days=args.target_window_days,
+                    max_capture_date=args.max_capture_date,
+                    broad_wayback_url_search=args.broad_wayback_url_search,
                     sleep_seconds=args.sleep,
                     capture_retries=args.capture_retries,
                     capture_timeout=args.capture_timeout,

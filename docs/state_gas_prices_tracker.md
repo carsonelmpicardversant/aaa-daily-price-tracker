@@ -62,6 +62,7 @@ python3 scripts/aaa_state_gas_prices_to_sheets.py \
   --start-date 2026-02-28 \
   --end-date 2026-05-14 \
   --target-window-days 3 \
+  --sleep 1 \
   --report-missing \
   --credentials credentials/aaa-gas-prices-service-account.json \
   --spreadsheet-id 1TqhBPhIdWGJAgcmaB4Lfk9CYEFAPSLgpIbFx4v47sWY
@@ -79,8 +80,31 @@ The targeted pass is intentionally more aggressive than the initial backfill:
   snapshots
 - it also checks 28-32 day offsets because archived AAA month comparisons can
   be more useful when exact calendar-month captures are missing
+- it skips future capture dates by default, so it does not ask Wayback for
+  month/year comparison snapshots that cannot exist yet
 - if one Wayback CDX lookup returns a bad response, it warns and keeps going
 - `--report-missing` prints the remaining gaps after the pass finishes
+
+If the targeted pass still leaves gaps, try the broader Wayback URL search:
+
+```sh
+python3 scripts/aaa_state_gas_prices_to_sheets.py \
+  --states IA \
+  --backfill \
+  --only-missing \
+  --broad-wayback-url-search \
+  --start-date 2026-02-28 \
+  --end-date 2026-05-14 \
+  --target-window-days 3 \
+  --sleep 1 \
+  --report-missing \
+  --credentials credentials/aaa-gas-prices-service-account.json \
+  --spreadsheet-id 1TqhBPhIdWGJAgcmaB4Lfk9CYEFAPSLgpIbFx4v47sWY
+```
+
+The broad search checks archived `gasprices.aaa.com` URLs and filters for the
+state query parameter. It is slower, but it can find snapshots that were stored
+under a slightly different URL shape.
 
 ## All-State Run
 
