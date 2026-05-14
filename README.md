@@ -5,8 +5,10 @@ Local scraper for AAA national average fuel prices with Google Sheets sync.
 Main files:
 
 - `scripts/aaa_gas_prices_to_sheets.py` - scraper, CSV cache writer, and Google Sheets sync.
+- `scripts/aaa_state_gas_prices_to_sheets.py` - state-level history tabs and Feb. 28 comparison.
 - `scripts/cloud_run_aaa_sync.py` - Cloud Run entrypoint with Cloud Storage CSV cache sync.
 - `docs/aaa_google_sheets_setup.md` - Google API setup, first backfill, and macOS/GitHub schedules.
+- `docs/state_gas_prices_tracker.md` - state tab and comparison workflow.
 - `docs/google_cloud_scheduler_setup.md` - Cloud Run Job and Cloud Scheduler setup.
 - `config/aaa_gas_prices.env.example` - environment variable template.
 

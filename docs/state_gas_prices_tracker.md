@@ -1,0 +1,85 @@
+# State Gas Prices Tracker
+
+The state tracker extends the AAA national tracker with full-history state tabs
+and a cross-state comparison tab.
+
+## Sheet Structure
+
+The intended Google Sheet layout is:
+
+- `AAA National Prices`
+- `Daily Comparison`
+- `State Comparison Since Feb 28`
+- one tab per state, such as `Iowa`, `California`, and `Texas`
+
+Each state tab mirrors the national tab:
+
+```text
+date | status | regular | mid_grade | premium | diesel | e85
+```
+
+The per-state CSV cache keeps the richer source columns under:
+
+```text
+outputs/aaa_gas_prices/states/
+```
+
+For example:
+
+```text
+outputs/aaa_gas_prices/states/IA.csv
+```
+
+## Iowa Proof Run
+
+Start with Iowa before running all states:
+
+```sh
+python3 scripts/aaa_state_gas_prices_to_sheets.py \
+  --states IA \
+  --backfill \
+  --start-date 2026-02-28 \
+  --end-date 2026-05-14 \
+  --credentials credentials/aaa-gas-prices-service-account.json \
+  --spreadsheet-id 1TqhBPhIdWGJAgcmaB4Lfk9CYEFAPSLgpIbFx4v47sWY
+```
+
+That will:
+
+- inspect Wayback snapshots around the date range
+- fetch the current AAA Iowa page
+- write `outputs/aaa_gas_prices/states/IA.csv`
+- update the `Iowa` tab
+- update `State Comparison Since Feb 28`
+
+## All-State Run
+
+After Iowa is verified:
+
+```sh
+python3 scripts/aaa_state_gas_prices_to_sheets.py \
+  --states all \
+  --backfill \
+  --start-date 2026-02-28 \
+  --end-date 2026-05-14 \
+  --credentials credentials/aaa-gas-prices-service-account.json \
+  --spreadsheet-id 1TqhBPhIdWGJAgcmaB4Lfk9CYEFAPSLgpIbFx4v47sWY
+```
+
+The all-state backfill can take a while because it checks Wayback snapshots for
+each state. Once the state CSVs exist, normal daily updates can run without
+`--backfill`.
+
+## Daily State Update
+
+For a daily current-state update:
+
+```sh
+python3 scripts/aaa_state_gas_prices_to_sheets.py \
+  --states all \
+  --credentials credentials/aaa-gas-prices-service-account.json \
+  --spreadsheet-id 1TqhBPhIdWGJAgcmaB4Lfk9CYEFAPSLgpIbFx4v47sWY
+```
+
+This fetches each live state page, merges the current records into each state's
+CSV history, updates state tabs, and refreshes the comparison tab.
