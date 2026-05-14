@@ -213,6 +213,8 @@ def merge_captures(captures: Iterable[dict[str, str]]) -> list[dict[str, str]]:
 
 def coalesce_dates_to_ranges(
     dates: Iterable[dt.date],
+    *,
+    max_range_days: int | None = None,
 ) -> list[tuple[dt.date, dt.date]]:
     sorted_dates = sorted(set(dates))
     if not sorted_dates:
@@ -222,7 +224,11 @@ def coalesce_dates_to_ranges(
     range_start = sorted_dates[0]
     previous = sorted_dates[0]
     for current in sorted_dates[1:]:
-        if current == previous + dt.timedelta(days=1):
+        range_days = (current - range_start).days + 1
+        if (
+            current == previous + dt.timedelta(days=1)
+            and (max_range_days is None or range_days <= max_range_days)
+        ):
             previous = current
             continue
         ranges.append((range_start, previous))
@@ -237,11 +243,15 @@ def fetch_targeted_wayback_captures_for_state(
     target_capture_dates: set[dt.date],
     *,
     broad_url_search: bool,
+    cdx_chunk_days: int,
     sleep_seconds: float,
     verbose: bool,
 ) -> list[dict[str, str]]:
     captures: list[dict[str, str]] = []
-    ranges = coalesce_dates_to_ranges(target_capture_dates)
+    ranges = coalesce_dates_to_ranges(
+        target_capture_dates,
+        max_range_days=cdx_chunk_days,
+    )
     for index, (range_start, range_end) in enumerate(ranges, start=1):
         try:
             range_captures = fetch_wayback_captures_for_state(
@@ -360,6 +370,7 @@ def fetch_state_wayback_records(
     limit_captures: int | None,
     target_capture_dates: set[dt.date] | None,
     broad_url_search: bool,
+    cdx_chunk_days: int,
     verbose: bool,
 ) -> list[aaa.PriceRecord]:
     if target_capture_dates is not None:
@@ -367,6 +378,7 @@ def fetch_state_wayback_records(
             state_code,
             target_capture_dates,
             broad_url_search=broad_url_search,
+            cdx_chunk_days=cdx_chunk_days,
             sleep_seconds=sleep_seconds,
             verbose=verbose,
         )
@@ -444,6 +456,7 @@ def process_state(
     target_window_days: int,
     max_capture_date: dt.date,
     broad_wayback_url_search: bool,
+    cdx_chunk_days: int,
     sleep_seconds: float,
     capture_retries: int,
     capture_timeout: int,
@@ -518,6 +531,7 @@ def process_state(
                 limit_captures=limit_captures,
                 target_capture_dates=target_capture_dates,
                 broad_url_search=broad_wayback_url_search,
+                cdx_chunk_days=cdx_chunk_days,
                 verbose=verbose,
             )
         )
@@ -726,6 +740,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--cdx-chunk-days",
+        type=int,
+        default=3,
+        help=(
+            "Maximum days per targeted Wayback CDX lookup. Use 1 for "
+            "broad searches if Wayback returns 504s."
+        ),
+    )
+    parser.add_argument(
         "--sleep",
         type=float,
         default=0.25,
@@ -794,6 +817,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_arg_parser().parse_args()
+    if args.cdx_chunk_days < 1:
+        print("Error: --cdx-chunk-days must be at least 1.", file=sys.stderr)
+        return 2
     if args.end_date < args.baseline_date and args.start_date is None:
         args.start_date = args.end_date
 
@@ -815,6 +841,7 @@ def main() -> int:
                     target_window_days=args.target_window_days,
                     max_capture_date=args.max_capture_date,
                     broad_wayback_url_search=args.broad_wayback_url_search,
+                    cdx_chunk_days=args.cdx_chunk_days,
                     sleep_seconds=args.sleep,
                     capture_retries=args.capture_retries,
                     capture_timeout=args.capture_timeout,

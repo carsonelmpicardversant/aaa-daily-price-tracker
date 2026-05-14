@@ -62,6 +62,7 @@ python3 scripts/aaa_state_gas_prices_to_sheets.py \
   --start-date 2026-02-28 \
   --end-date 2026-05-14 \
   --target-window-days 3 \
+  --cdx-chunk-days 3 \
   --sleep 1 \
   --report-missing \
   --credentials credentials/aaa-gas-prices-service-account.json \
@@ -95,7 +96,9 @@ python3 scripts/aaa_state_gas_prices_to_sheets.py \
   --broad-wayback-url-search \
   --start-date 2026-02-28 \
   --end-date 2026-05-14 \
+  --max-capture-date 2026-05-14 \
   --target-window-days 3 \
+  --cdx-chunk-days 1 \
   --sleep 1 \
   --report-missing \
   --credentials credentials/aaa-gas-prices-service-account.json \
@@ -104,7 +107,9 @@ python3 scripts/aaa_state_gas_prices_to_sheets.py \
 
 The broad search checks archived `gasprices.aaa.com` URLs and filters for the
 state query parameter. It is slower, but it can find snapshots that were stored
-under a slightly different URL shape.
+under a slightly different URL shape. Use `--cdx-chunk-days 1` for this pass
+because broad wildcard Wayback searches can time out when the date range is
+too large.
 
 ## All-State Run
 
