@@ -160,7 +160,18 @@ def fetch_wayback_captures_for_state(
         params["collapse"] = "digest"
     cdx_url = f"{WAYBACK_CDX_URL}?{urllib.parse.urlencode(params)}"
     payload = aaa.http_get_text(cdx_url, retries=4, timeout=90)
-    data = json.loads(payload)
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        preview = aaa.normalize_space(payload[:200])
+        print(
+            f"Warning: {state_code} skipped Wayback CDX range "
+            f"{lookup_start} to {lookup_end}: invalid JSON response "
+            f"({exc}). Preview: {preview!r}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return []
     if not data or len(data) == 1:
         return []
 
@@ -207,17 +218,27 @@ def fetch_targeted_wayback_captures_for_state(
     state_code: str,
     target_capture_dates: set[dt.date],
     *,
+    sleep_seconds: float,
     verbose: bool,
 ) -> list[dict[str, str]]:
     captures: list[dict[str, str]] = []
     ranges = coalesce_dates_to_ranges(target_capture_dates)
     for index, (range_start, range_end) in enumerate(ranges, start=1):
-        range_captures = fetch_wayback_captures_for_state(
-            state_code,
-            range_start,
-            range_end,
-            collapse_digest=False,
-        )
+        try:
+            range_captures = fetch_wayback_captures_for_state(
+                state_code,
+                range_start,
+                range_end,
+                collapse_digest=False,
+            )
+        except Exception as exc:
+            print(
+                f"Warning: {state_code} skipped Wayback CDX range "
+                f"{range_start} to {range_end}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            range_captures = []
         captures.extend(range_captures)
         if verbose:
             print(
@@ -225,6 +246,8 @@ def fetch_targeted_wayback_captures_for_state(
                 f"{range_start} to {range_end}: {len(range_captures)} captures.",
                 flush=True,
             )
+        if sleep_seconds > 0:
+            time.sleep(sleep_seconds)
     return merge_captures(captures)
 
 
@@ -294,6 +317,7 @@ def fetch_state_wayback_records(
         captures = fetch_targeted_wayback_captures_for_state(
             state_code,
             target_capture_dates,
+            sleep_seconds=sleep_seconds,
             verbose=verbose,
         )
         captures = [

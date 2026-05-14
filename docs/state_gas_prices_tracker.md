@@ -79,6 +79,7 @@ The targeted pass is intentionally more aggressive than the initial backfill:
   snapshots
 - it also checks 28-32 day offsets because archived AAA month comparisons can
   be more useful when exact calendar-month captures are missing
+- if one Wayback CDX lookup returns a bad response, it warns and keeps going
 - `--report-missing` prints the remaining gaps after the pass finishes
 
 ## All-State Run
