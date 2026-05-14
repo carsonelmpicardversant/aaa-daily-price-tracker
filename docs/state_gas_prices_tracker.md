@@ -111,6 +111,31 @@ under a slightly different URL shape. Use `--cdx-chunk-days 1` for this pass
 because broad wildcard Wayback searches can time out when the date range is
 too large.
 
+## State Coverage Report
+
+Before creating every state tab in Google Sheets, run a coverage report. This
+uses the same state CSV/backfill logic, but it does not update Google Sheets.
+
+```sh
+python3 scripts/aaa_state_gas_prices_to_sheets.py \
+  --states all \
+  --backfill \
+  --start-date 2026-02-28 \
+  --end-date 2026-05-14 \
+  --sleep 0.5 \
+  --coverage-report
+```
+
+The report is written to:
+
+```text
+outputs/aaa_gas_prices/state_coverage_report.csv
+```
+
+Use the report to compare each state against Iowa before deciding whether to
+create all tabs. Key fields are `coverage_pct`, `missing_days`,
+`baseline_status`, and `missing_dates`.
+
 ## All-State Run
 
 After Iowa is verified:

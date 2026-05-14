@@ -21,6 +21,7 @@ import aaa_gas_prices_to_sheets as aaa
 STATE_COMPARISON_SHEET_NAME = "State Comparison Since Feb 28"
 DEFAULT_BASELINE_DATE = dt.date(2026, 2, 28)
 DEFAULT_STATE_CSV_DIR = Path("outputs/aaa_gas_prices/states")
+DEFAULT_COVERAGE_REPORT_PATH = Path("outputs/aaa_gas_prices/state_coverage_report.csv")
 WAYBACK_CDX_URL = "https://web.archive.org/cdx"
 
 STATES: tuple[tuple[str, str], ...] = (
@@ -85,6 +86,8 @@ class StateResult:
     code: str
     name: str
     csv_path: Path
+    start_date: dt.date
+    end_date: dt.date
     ok_days: int
     expected_days: int
     latest_date: dt.date | None
@@ -562,6 +565,8 @@ def process_state(
         code=state_code,
         name=state_name,
         csv_path=csv_path,
+        start_date=effective_start_date,
+        end_date=end_date,
         ok_days=ok_days,
         expected_days=expected_days,
         latest_date=latest_date,
@@ -638,6 +643,89 @@ def state_comparison_rows(
             ]
         )
     return rows
+
+
+def coverage_report_rows(
+    results: Iterable[StateResult],
+    baseline_date: dt.date,
+) -> list[list[Any]]:
+    rows: list[list[Any]] = [
+        [
+            "state",
+            "state_code",
+            "start_date",
+            "end_date",
+            "populated_days",
+            "expected_days",
+            "coverage_pct",
+            "missing_days",
+            "baseline_date",
+            "baseline_status",
+            "baseline_regular",
+            "latest_date",
+            "latest_regular",
+            "dollar_change",
+            "percent_change",
+            "first_missing_date",
+            "last_missing_date",
+            "missing_dates",
+            "csv_path",
+        ]
+    ]
+
+    for result in results:
+        records = aaa.load_existing_records(result.csv_path)
+        by_date = {record.date: record for record in records}
+        baseline_record = by_date.get(baseline_date)
+        latest_record = max(records, key=lambda record: record.date) if records else None
+
+        dollar_change: float | None = None
+        percent_change: float | None = None
+        if (
+            baseline_record
+            and latest_record
+            and baseline_record.regular is not None
+            and latest_record.regular is not None
+        ):
+            dollar_change = latest_record.regular - baseline_record.regular
+            if baseline_record.regular:
+                percent_change = dollar_change / baseline_record.regular
+
+        coverage_pct = (
+            result.ok_days / result.expected_days if result.expected_days else 0
+        )
+        missing_dates = [day.isoformat() for day in result.missing_dates]
+        rows.append(
+            [
+                result.name,
+                result.code,
+                result.start_date.isoformat(),
+                result.end_date.isoformat(),
+                result.ok_days,
+                result.expected_days,
+                format_percent(coverage_pct),
+                len(result.missing_dates),
+                baseline_date.isoformat(),
+                "ok" if baseline_record else "missing",
+                format_price(baseline_record.regular if baseline_record else None),
+                latest_record.date.isoformat() if latest_record else "",
+                format_price(latest_record.regular if latest_record else None),
+                format_change(dollar_change),
+                format_percent(percent_change),
+                missing_dates[0] if missing_dates else "",
+                missing_dates[-1] if missing_dates else "",
+                ";".join(missing_dates),
+                str(result.csv_path),
+            ]
+        )
+    return rows
+
+
+def write_coverage_report(path: Path, rows: list[list[Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerows(rows)
 
 
 def sync_state_tabs(
@@ -793,6 +881,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Only write local CSVs; do not update Google Sheets.",
     )
     parser.add_argument(
+        "--coverage-report",
+        action="store_true",
+        help=(
+            "Write a state coverage CSV and do not update Google Sheets. "
+            "Useful before creating all state tabs."
+        ),
+    )
+    parser.add_argument(
+        "--coverage-report-csv",
+        type=Path,
+        default=DEFAULT_COVERAGE_REPORT_PATH,
+        help=(
+            "Coverage report CSV path. Defaults to "
+            "outputs/aaa_gas_prices/state_coverage_report.csv."
+        ),
+    )
+    parser.add_argument(
         "--skip-state-tabs",
         action="store_true",
         help="Do not write individual state tabs.",
@@ -868,6 +973,19 @@ def main() -> int:
                 )
             else:
                 print(f"{result.code}: no missing dates.", flush=True)
+
+    if args.coverage_report:
+        rows = coverage_report_rows(results, args.baseline_date)
+        write_coverage_report(args.coverage_report_csv, rows)
+        print(
+            f"Wrote coverage report to {args.coverage_report_csv}.",
+            flush=True,
+        )
+        print(
+            "Skipped Google Sheets sync because --coverage-report was set.",
+            flush=True,
+        )
+        return 1 if failures else 0
 
     if args.skip_google:
         print("Skipped Google Sheets sync because --skip-google was set.", flush=True)
