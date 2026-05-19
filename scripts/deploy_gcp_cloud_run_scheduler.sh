@@ -17,6 +17,7 @@ STATE_CSV_DIR="${AAA_STATE_CSV_DIR:-outputs/aaa_gas_prices/states}"
 STATE_GCS_PREFIX="${AAA_STATE_GCS_PREFIX:-outputs/aaa_gas_prices/states}"
 STATE_START_DATE="${AAA_STATE_START_DATE:-2026-05-19}"
 STATE_COMPARISON_SHEET_NAME="${AAA_STATE_COMPARISON_SHEET_NAME:-State Comparison Since May 19}"
+STATE_SHEET_WRITE_SLEEP="${AAA_STATE_SHEET_WRITE_SLEEP:-5}"
 SHEETS_SECRET_NAME="${SHEETS_SECRET_NAME:-aaa-gas-prices-service-account-json}"
 SHEETS_CREDENTIALS_FILE="${SHEETS_CREDENTIALS_FILE:-credentials/aaa-gas-prices-service-account.json}"
 SECRET_MOUNT_PATH="/secrets/google/aaa-gas-prices-service-account.json"
@@ -25,7 +26,7 @@ RUNTIME_SA="${RUNTIME_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHEDULER_SA="${SCHEDULER_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/${JOB_NAME}:latest"
 RUN_JOB_URI="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/${REGION}/jobs/${JOB_NAME}:run"
-ENV_VARS="^|^GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}|AAA_GCS_BUCKET=${BUCKET}|AAA_GCS_OBJECT=${CSV_OBJECT}|AAA_CSV_PATH=${CSV_OBJECT}|AAA_SYNC_STATES=${SYNC_STATES}|AAA_STATE_CSV_DIR=${STATE_CSV_DIR}|AAA_STATE_GCS_PREFIX=${STATE_GCS_PREFIX}|AAA_STATE_START_DATE=${STATE_START_DATE}|AAA_STATE_COMPARISON_SHEET_NAME=${STATE_COMPARISON_SHEET_NAME}|GOOGLE_APPLICATION_CREDENTIALS=${SECRET_MOUNT_PATH}"
+ENV_VARS="^|^GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}|AAA_GCS_BUCKET=${BUCKET}|AAA_GCS_OBJECT=${CSV_OBJECT}|AAA_CSV_PATH=${CSV_OBJECT}|AAA_SYNC_STATES=${SYNC_STATES}|AAA_STATE_CSV_DIR=${STATE_CSV_DIR}|AAA_STATE_GCS_PREFIX=${STATE_GCS_PREFIX}|AAA_STATE_START_DATE=${STATE_START_DATE}|AAA_STATE_COMPARISON_SHEET_NAME=${STATE_COMPARISON_SHEET_NAME}|AAA_STATE_SHEET_WRITE_SLEEP=${STATE_SHEET_WRITE_SLEEP}|GOOGLE_APPLICATION_CREDENTIALS=${SECRET_MOUNT_PATH}"
 
 gcloud config set project "${PROJECT_ID}"
 
@@ -101,7 +102,7 @@ gcloud run jobs deploy "${JOB_NAME}" \
   --service-account="${RUNTIME_SA}" \
   --tasks=1 \
   --max-retries=1 \
-  --task-timeout=1800s \
+  --task-timeout=3600s \
   --cpu=1 \
   --memory=512Mi \
   --set-env-vars="${ENV_VARS}" \
@@ -122,7 +123,7 @@ if gcloud scheduler jobs describe "${SCHEDULER_JOB_NAME}" \
     --uri="${RUN_JOB_URI}" \
     --http-method=POST \
     --oauth-service-account-email="${SCHEDULER_SA}" \
-    --headers="Content-Type=application/json" \
+    --update-headers="Content-Type=application/json" \
     --message-body="{}" \
     --attempt-deadline=300s
 else
@@ -146,6 +147,7 @@ echo "CSV cache: gs://${BUCKET}/${CSV_OBJECT}"
 echo "State sync enabled: ${SYNC_STATES}"
 echo "State CSV cache prefix: gs://${BUCKET}/${STATE_GCS_PREFIX}/"
 echo "State start date: ${STATE_START_DATE}"
+echo "State sheet write sleep: ${STATE_SHEET_WRITE_SLEEP}s"
 echo
 echo "Manual test:"
 echo "  gcloud run jobs execute ${JOB_NAME} --region=${REGION} --wait"

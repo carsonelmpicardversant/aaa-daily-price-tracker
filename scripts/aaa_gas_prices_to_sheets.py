@@ -49,6 +49,17 @@ SCOPES = (
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 )
+GOOGLE_API_MAX_ATTEMPTS = 6
+GOOGLE_API_RETRY_BASE_DELAY_SECONDS = 5
+GOOGLE_API_RETRY_MAX_DELAY_SECONDS = 60
+GOOGLE_API_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+GOOGLE_API_RETRY_REASONS = {
+    "RATE_LIMIT_EXCEEDED",
+    "rateLimitExceeded",
+    "userRateLimitExceeded",
+    "quotaExceeded",
+    "backendError",
+}
 
 HEADERS = [
     "date",
@@ -716,14 +727,68 @@ class GoogleApiClient:
         if body is not None:
             request_body = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json"
-        try:
-            raw, _ = http_request(url, method=method, body=request_body, headers=headers)
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Google API {method} {url} failed: {detail}") from exc
+        for attempt in range(1, GOOGLE_API_MAX_ATTEMPTS + 1):
+            try:
+                raw, _ = http_request(
+                    url, method=method, body=request_body, headers=headers
+                )
+                break
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                if (
+                    attempt < GOOGLE_API_MAX_ATTEMPTS
+                    and google_api_error_is_retryable(exc, detail)
+                ):
+                    delay = google_api_retry_delay(exc, attempt)
+                    print(
+                        "Google API rate/availability limit hit; "
+                        f"retrying {method} in {delay:.0f}s "
+                        f"(attempt {attempt}/{GOOGLE_API_MAX_ATTEMPTS}).",
+                        flush=True,
+                    )
+                    time.sleep(delay)
+                    continue
+                raise RuntimeError(
+                    f"Google API {method} {url} failed: {detail}"
+                ) from exc
         if not raw:
             return {}
         return json.loads(raw.decode("utf-8"))
+
+
+def google_api_error_is_retryable(
+    exc: urllib.error.HTTPError, detail: str
+) -> bool:
+    if exc.code in GOOGLE_API_RETRY_STATUS_CODES:
+        return True
+    try:
+        payload = json.loads(detail)
+    except json.JSONDecodeError:
+        return False
+
+    error = payload.get("error", {})
+    if str(error.get("status", "")) == "RESOURCE_EXHAUSTED":
+        return True
+
+    reasons: list[str] = []
+    for item in error.get("errors", []):
+        if isinstance(item, dict) and item.get("reason"):
+            reasons.append(str(item["reason"]))
+    for item in error.get("details", []):
+        if isinstance(item, dict) and item.get("reason"):
+            reasons.append(str(item["reason"]))
+    return any(reason in GOOGLE_API_RETRY_REASONS for reason in reasons)
+
+
+def google_api_retry_delay(exc: urllib.error.HTTPError, attempt: int) -> float:
+    retry_after = exc.headers.get("Retry-After") if exc.headers else None
+    if retry_after:
+        try:
+            return min(float(retry_after), GOOGLE_API_RETRY_MAX_DELAY_SECONDS)
+        except ValueError:
+            pass
+    delay = GOOGLE_API_RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+    return min(float(delay), GOOGLE_API_RETRY_MAX_DELAY_SECONDS)
 
 
 def sign_rs256(private_key: str, signing_input: str) -> bytes:

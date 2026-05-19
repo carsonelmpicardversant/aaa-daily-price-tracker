@@ -23,6 +23,7 @@ DEFAULT_STATE_CSV_DIR = Path("outputs/aaa_gas_prices/states")
 DEFAULT_STATE_GCS_PREFIX = "outputs/aaa_gas_prices/states"
 DEFAULT_STATE_START_DATE = "2026-05-19"
 DEFAULT_STATE_COMPARISON_SHEET_NAME = "State Comparison Since May 19"
+DEFAULT_STATE_SHEET_WRITE_SLEEP = "5"
 METADATA_TOKEN_URL = (
     "http://metadata.google.internal/computeMetadata/v1/"
     "instance/service-accounts/default/token"
@@ -227,6 +228,10 @@ def main() -> int:
         "AAA_STATE_COMPARISON_SHEET_NAME",
         DEFAULT_STATE_COMPARISON_SHEET_NAME,
     ).strip() or DEFAULT_STATE_COMPARISON_SHEET_NAME
+    state_sheet_write_sleep = os.environ.get(
+        "AAA_STATE_SHEET_WRITE_SLEEP",
+        DEFAULT_STATE_SHEET_WRITE_SLEEP,
+    ).strip() or DEFAULT_STATE_SHEET_WRITE_SLEEP
 
     token = metadata_access_token()
     download_cache(bucket, object_name, csv_path, token)
@@ -257,6 +262,8 @@ def main() -> int:
             state_start_date,
             "--comparison-sheet-name",
             state_comparison_sheet_name,
+            "--sheet-write-sleep",
+            state_sheet_write_sleep,
             "--credentials",
             credentials_path,
             "--spreadsheet-id",

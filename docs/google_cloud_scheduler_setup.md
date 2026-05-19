@@ -96,6 +96,10 @@ By default, the deployed Cloud Run job updates:
 - one tab per state, starting with rows from `2026-05-19`
 - `State Comparison Since May 19`
 
+The first all-state run creates or updates more than 50 tabs, so the state
+sync pauses between sheet writes and retries temporary Google Sheets quota
+errors. A manual first run can take several minutes.
+
 To temporarily disable state tabs during a deploy, run:
 
 ```sh
@@ -103,6 +107,15 @@ export AAA_SYNC_STATES=0
 ```
 
 before running `./scripts/deploy_gcp_cloud_run_scheduler.sh`.
+
+To make the state tab writes slower or faster, set:
+
+```sh
+export AAA_STATE_SHEET_WRITE_SLEEP=5
+```
+
+before deploying. Keep this at `5` or higher if Google Sheets returns quota
+errors.
 
 ## Manual Test
 

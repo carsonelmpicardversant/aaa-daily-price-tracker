@@ -22,6 +22,7 @@ STATE_COMPARISON_SHEET_NAME = "State Comparison Since Feb 28"
 DEFAULT_BASELINE_DATE = dt.date(2026, 2, 28)
 DEFAULT_STATE_CSV_DIR = Path("outputs/aaa_gas_prices/states")
 DEFAULT_COVERAGE_REPORT_PATH = Path("outputs/aaa_gas_prices/state_coverage_report.csv")
+DEFAULT_SHEET_WRITE_SLEEP_SECONDS = 5.0
 WAYBACK_CDX_URL = "https://web.archive.org/cdx"
 
 STATES: tuple[tuple[str, str], ...] = (
@@ -732,6 +733,8 @@ def sync_state_tabs(
     client: aaa.GoogleApiClient,
     spreadsheet_id: str,
     results: Iterable[StateResult],
+    *,
+    sheet_write_sleep: float,
 ) -> None:
     for result in results:
         records = aaa.load_existing_records(result.csv_path)
@@ -743,6 +746,8 @@ def sync_state_tabs(
         rows = aaa.records_to_google_sheet_rows(records, start_date, end_date)
         aaa.update_sheet(client, spreadsheet_id, result.name, rows)
         print(f"Updated Google Sheet tab '{result.name}'.", flush=True)
+        if sheet_write_sleep > 0:
+            time.sleep(sheet_write_sleep)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -916,6 +921,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--sheet-write-sleep",
+        type=float,
+        default=float(
+            os.environ.get(
+                "AAA_STATE_SHEET_WRITE_SLEEP", DEFAULT_SHEET_WRITE_SLEEP_SECONDS
+            )
+        ),
+        help=(
+            "Seconds to pause after each Google Sheets state-tab write. Defaults "
+            f"to {DEFAULT_SHEET_WRITE_SLEEP_SECONDS:g}, or AAA_STATE_SHEET_WRITE_SLEEP."
+        ),
+    )
+    parser.add_argument(
         "--report-missing",
         action="store_true",
         help="Print remaining missing dates after each state is processed.",
@@ -1011,8 +1029,15 @@ def main() -> int:
 
     client = aaa.GoogleApiClient(args.credentials, aaa.SCOPES)
     if not args.skip_state_tabs:
-        sync_state_tabs(client, args.spreadsheet_id, results)
+        sync_state_tabs(
+            client,
+            args.spreadsheet_id,
+            results,
+            sheet_write_sleep=args.sheet_write_sleep,
+        )
     if not args.skip_comparison_tab:
+        if args.sheet_write_sleep > 0 and not args.skip_state_tabs:
+            time.sleep(args.sheet_write_sleep)
         rows = state_comparison_rows(args.states, args.csv_dir, args.baseline_date)
         aaa.update_sheet(client, args.spreadsheet_id, args.comparison_sheet_name, rows)
         print(
