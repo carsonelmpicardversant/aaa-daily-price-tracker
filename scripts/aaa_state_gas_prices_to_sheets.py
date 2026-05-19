@@ -908,6 +908,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Do not write the all-state comparison tab.",
     )
     parser.add_argument(
+        "--comparison-sheet-name",
+        default=STATE_COMPARISON_SHEET_NAME,
+        help=(
+            "Google Sheet tab name for the state comparison tab. Defaults to "
+            f"{STATE_COMPARISON_SHEET_NAME!r}."
+        ),
+    )
+    parser.add_argument(
         "--report-missing",
         action="store_true",
         help="Print remaining missing dates after each state is processed.",
@@ -1006,9 +1014,9 @@ def main() -> int:
         sync_state_tabs(client, args.spreadsheet_id, results)
     if not args.skip_comparison_tab:
         rows = state_comparison_rows(args.states, args.csv_dir, args.baseline_date)
-        aaa.update_sheet(client, args.spreadsheet_id, STATE_COMPARISON_SHEET_NAME, rows)
+        aaa.update_sheet(client, args.spreadsheet_id, args.comparison_sheet_name, rows)
         print(
-            f"Updated Google Sheet tab '{STATE_COMPARISON_SHEET_NAME}'.",
+            f"Updated Google Sheet tab '{args.comparison_sheet_name}'.",
             flush=True,
         )
 

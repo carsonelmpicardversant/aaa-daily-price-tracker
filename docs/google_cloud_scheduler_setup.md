@@ -9,7 +9,11 @@ Cloud Scheduler + Cloud Run Jobs.
 - Cloud Scheduler calls the Cloud Run Jobs API to execute a Cloud Run Job.
 - The Cloud Run Job runs `scripts/cloud_run_aaa_sync.py`.
 - The wrapper downloads the CSV cache from Cloud Storage, runs
-  `scripts/aaa_gas_prices_to_sheets.py`, then uploads the refreshed CSV cache.
+  `scripts/aaa_gas_prices_to_sheets.py`, then uploads the refreshed national
+  CSV cache.
+- The same wrapper also runs `scripts/aaa_state_gas_prices_to_sheets.py` for
+  all states. State CSV caches are stored separately in Cloud Storage and build
+  forward from `2026-05-19`.
 - Secret Manager stores the Google Sheets service-account JSON key.
 
 Useful Google docs:
@@ -66,10 +70,39 @@ The script creates or updates:
 
 - Artifact Registry repository: `aaa-gas-prices`
 - Cloud Storage bucket: `${PROJECT_ID}-aaa-gas-prices-cache`
+- national CSV cache:
+  `outputs/aaa_gas_prices/aaa_national_gas_prices.csv`
+- state CSV cache prefix:
+  `outputs/aaa_gas_prices/states/`
 - Cloud Run Job: `aaa-gas-prices-sync`
 - Cloud Scheduler Job: `aaa-gas-prices-430am`
 - runtime service account: `aaa-gas-prices-runner`
 - scheduler service account: `aaa-gas-prices-scheduler`
+
+The deploy script keeps the existing national CSV cache in Cloud Storage by
+default. To intentionally replace the Cloud Storage cache with the repo CSV,
+set:
+
+```sh
+export REFRESH_GCS_CACHE=1
+```
+
+before deploying.
+
+By default, the deployed Cloud Run job updates:
+
+- `AAA National Prices`
+- `Daily Comparison`
+- one tab per state, starting with rows from `2026-05-19`
+- `State Comparison Since May 19`
+
+To temporarily disable state tabs during a deploy, run:
+
+```sh
+export AAA_SYNC_STATES=0
+```
+
+before running `./scripts/deploy_gcp_cloud_run_scheduler.sh`.
 
 ## Manual Test
 
@@ -86,6 +119,8 @@ Confirm the Cloud Run logs show:
 ```text
 Updated Google Sheet tab 'AAA National Prices'.
 Updated Google Sheet tab 'Daily Comparison'.
+Updated Google Sheet tab 'Iowa'.
+Updated Google Sheet tab 'State Comparison Since May 19'.
 Uploaded refreshed CSV cache to gs://...
 ```
 
