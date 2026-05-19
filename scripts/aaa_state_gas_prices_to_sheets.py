@@ -24,6 +24,10 @@ DEFAULT_STATE_CSV_DIR = Path("outputs/aaa_gas_prices/states")
 DEFAULT_COVERAGE_REPORT_PATH = Path("outputs/aaa_gas_prices/state_coverage_report.csv")
 DEFAULT_SHEET_WRITE_SLEEP_SECONDS = 5.0
 WAYBACK_CDX_URL = "https://web.archive.org/cdx"
+LEADING_SHEET_NAMES = (
+    aaa.DATA_SHEET_NAME,
+    aaa.COMPARISON_SHEET_NAME,
+)
 
 STATES: tuple[tuple[str, str], ...] = (
     ("AL", "Alabama"),
@@ -750,6 +754,62 @@ def sync_state_tabs(
             time.sleep(sheet_write_sleep)
 
 
+def reorder_sheet_tabs(
+    client: aaa.GoogleApiClient,
+    spreadsheet_id: str,
+    comparison_sheet_name: str,
+) -> None:
+    metadata = client.request_json(
+        "GET",
+        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}",
+        params={"fields": "sheets.properties(sheetId,title,index)"},
+    )
+    existing = sorted(
+        (sheet["properties"] for sheet in metadata.get("sheets", [])),
+        key=lambda props: int(props.get("index", 0)),
+    )
+    if not existing:
+        return
+
+    existing_by_title = {props["title"]: props for props in existing}
+    desired_names = [
+        *LEADING_SHEET_NAMES,
+        comparison_sheet_name,
+        *(state_name for _, state_name in STATES),
+    ]
+    ordered_names = [name for name in desired_names if name in existing_by_title]
+    ordered_set = set(ordered_names)
+    ordered_names.extend(
+        props["title"] for props in existing if props["title"] not in ordered_set
+    )
+
+    current_names = [props["title"] for props in existing]
+    if current_names == ordered_names:
+        print("Google Sheet tabs already in preferred order.", flush=True)
+        return
+
+    requests = []
+    for index, name in enumerate(ordered_names):
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": int(existing_by_title[name]["sheetId"]),
+                        "index": index,
+                    },
+                    "fields": "index",
+                }
+            }
+        )
+
+    client.request_json(
+        "POST",
+        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}:batchUpdate",
+        body={"requests": requests},
+    )
+    print("Reordered Google Sheet tabs.", flush=True)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Scrape AAA state gas prices and sync state tabs."
@@ -913,6 +973,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Do not write the all-state comparison tab.",
     )
     parser.add_argument(
+        "--skip-tab-reorder",
+        action="store_true",
+        help="Do not reorder Google Sheet tabs after syncing.",
+    )
+    parser.add_argument(
         "--comparison-sheet-name",
         default=STATE_COMPARISON_SHEET_NAME,
         help=(
@@ -1044,6 +1109,12 @@ def main() -> int:
             f"Updated Google Sheet tab '{args.comparison_sheet_name}'.",
             flush=True,
         )
+    if not args.skip_tab_reorder:
+        if args.sheet_write_sleep > 0 and (
+            not args.skip_state_tabs or not args.skip_comparison_tab
+        ):
+            time.sleep(args.sheet_write_sleep)
+        reorder_sheet_tabs(client, args.spreadsheet_id, args.comparison_sheet_name)
 
     if failures:
         print("Completed with state failures:", file=sys.stderr)

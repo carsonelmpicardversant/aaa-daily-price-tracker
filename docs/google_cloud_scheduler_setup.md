@@ -96,6 +96,10 @@ By default, the deployed Cloud Run job updates:
 - one tab per state, starting with rows from `2026-05-19`
 - `State Comparison Since May 19`
 
+After each state sync, the spreadsheet tabs are reordered with the national
+tabs first, then `State Comparison Since May 19`, then all state tabs
+alphabetically.
+
 The first all-state run creates or updates more than 50 tabs, so the state
 sync pauses between sheet writes and retries temporary Google Sheets quota
 errors. A manual first run can take several minutes.
